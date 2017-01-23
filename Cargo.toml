@@ -11,3 +11,6 @@ license = "MIT OR Apache-2.0"
 documentation = "https://github.com/mike-marcacci/ozone"
 homepage = "https://github.com/mike-marcacci/ozone"
 repository = "https://github.com/mike-marcacci/ozone"
+
+[dependencies]
+memmap = "0.5.0"
