@@ -5,7 +5,7 @@ Ozone is a pure-[rust](http://www.rust-lang.org/) key/value store based on [Bolt
 
 Goals
 -----
-The goal of this project is to build a perfectly idiomatic persistence layer using the standard library's [collections::BTreeMap](https://doc.rust-lang.org/collections/struct.BTreeMap.html) as a model, letting the language itself do as much as possible.
+The goal of this project is to build a perfectly idiomatic persistence layer using the standard library's [collections::HashMap](https://doc.rust-lang.org/collections/struct.HashMap.html) as a model, letting the language itself do as much as possible.
 
 Specific features that will be implemented include:
 

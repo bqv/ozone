@@ -3,11 +3,14 @@ name = "ozone"
 version = "0.0.1"
 description = "Pure-rust key/value store based on BoltDB"
 keywords = ["database","persistance","BoltDB","LevelDB"]
-authors = ["Mike Marcacci <mike.marcacci@gmail.com>"]
+authors = ["Tony Olagbaiye <frony0@gmail.com>","Mike Marcacci <mike.marcacci@gmail.com>"]
 
 readme = "README.md"
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 
-documentation = "https://github.com/mike-marcacci/ozone"
-homepage = "https://github.com/mike-marcacci/ozone"
-repository = "https://github.com/mike-marcacci/ozone"
+documentation = "https://github.com/bqv/ozone"
+homepage = "https://github.com/bqv/ozone"
+repository = "https://github.com/bqv/ozone"
+
+[dependencies]
+memmap = "0.5.0"
