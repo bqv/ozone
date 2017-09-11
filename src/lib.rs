@@ -1,6 +1,7 @@
 
 extern crate memmap;
 
+mod hash;
 mod store;
 
 #[test]
