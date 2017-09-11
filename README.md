@@ -51,10 +51,9 @@ I'm writing this to glean a deeper understanding of persistant storage technique
 
 ## License
 
-Licensed under either of
+Licensed under
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+ * Mozilla Public License 2.0 ([LICENSE](LICENSE) or http://www.mozilla.org/en-US/MPL/2.0/)
 
 at your option.
 
