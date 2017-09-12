@@ -64,21 +64,21 @@ impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
     where K: Eq + Hash + Sized,
           V: Sized,
 {
-    fn or_insert(self, default: V) -> &'a mut V {
+    pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => entry.insert(default)
         }
     }
 
-    fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+    pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => entry.insert(default())
         }
     }
 
-    fn key(&self) -> &K {
+    pub fn key(&self) -> &K {
         match *self {
             Entry::Occupied(ref entry) => entry.key(),
             Entry::Vacant(ref entry) => entry.key()
@@ -90,11 +90,11 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
     where K: Eq + Hash + Sized,
           V: Sized,
 {
-    fn key(&self) -> &K {
+    pub fn key(&self) -> &K {
         &self.elem.key
     }
 
-    fn remove_entry(self) -> (K, V) {
+    pub fn remove_entry(self) -> (K, V) {
         let mut key: K = unsafe { mem::uninitialized() };
         let mut value: V = unsafe { mem::uninitialized() };
         self.elem.hash |= 0x8000000000000000u64;
@@ -103,25 +103,25 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
         (key, value)
     }
 
-    fn get(&self) -> &V {
+    pub fn get(&self) -> &V {
         &self.elem.value
     }
 
-    fn get_mut(&mut self) -> &mut V {
+    pub fn get_mut(&mut self) -> &mut V {
         &mut self.elem.value
     }
 
-    fn into_mut(self) -> &'a mut V {
+    pub fn into_mut(self) -> &'a mut V {
         &mut self.elem.value
     }
 
-    fn insert(&mut self, value: V) -> V {
+    pub fn insert(&mut self, value: V) -> V {
         let mut value = value;
         mem::swap(&mut value, &mut self.elem.value);
         value
     }
 
-    fn remove(&mut self) -> V {
+    pub fn remove(&mut self) -> V {
         let mut value: V = unsafe { mem::uninitialized() };
         self.elem.hash |= 0x8000000000000000u64;
         mem::swap(&mut value, &mut self.elem.value);
@@ -133,17 +133,17 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
     where K: Eq + Hash + Sized,
           V: Sized,
 {
-    fn key(&self) -> &K {
+    pub fn key(&self) -> &K {
         &self.elem.key
     }
 
-    fn into_key(self) -> K {
+    pub fn into_key(self) -> K {
         let mut key: K = unsafe { mem::uninitialized() };
         mem::swap(&mut key, &mut self.elem.key);
         key
     }
 
-    fn insert(self, value: V) -> &'a mut V {
+    pub fn insert(self, value: V) -> &'a mut V {
         self.elem.value = value;
         &mut self.elem.value
     }
@@ -251,6 +251,14 @@ impl<K, V, B> HashMap<K, V, B>
             self.buffer[pos].hash = 0;
             Entry::Vacant(VacantEntry { elem: &mut self.buffer[pos] })
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.num_elems == 0
+    }
+
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.get(key).is_some()
     }
 }
 
