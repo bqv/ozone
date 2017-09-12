@@ -1,8 +1,8 @@
 
 extern crate memmap;
 
-mod hash;
-mod store;
+mod table;
+mod buffer;
 
 #[test]
 fn it_works() {
