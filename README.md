@@ -1,6 +1,6 @@
 ozone
 =====
-Ozone is a pure-[rust](http://www.rust-lang.org/) key/value store based on [BoltDB](https://github.com/boltdb/bolt) and inspired by the language's built-in concept of memory ownership.
+Ozone is a pure-[rust](http://www.rust-lang.org/) key/value store inspired by the language's built-in concept of memory ownership.
 
 
 Goals
@@ -13,27 +13,24 @@ Specific features that will be implemented include:
 - copy-on-write, lock-free MVCC
 - recycling of emptied pages
 
-This is my first real Rust project, so any hints, suggestions, and nudges are very welcome.
-
 
 
 
 Proposed API
 ------------
-I'm starting as simple as possible, but this will change 
+The API will be identical to that provided by collections::HashMap, including an Entry API:
 
 ```rust
-// Open a database file (creating if nonexistant)
-let db = ozone::open("my.db").unwrap();
-
-// DB is essentially a collections::BTreeMap<&str, Bucket>
-let mut bucket : Bucket = db.entry("bucket-name");
-
-// Bucket is essentially a collections::BTreeMap<&str, &str>
-let old_value : Option<str> = bucket.insert("key-name", "value");
-
-// Bucket is essentially a collections::BTreeMap<&str, &str>
-let value : Option<str>  = bucket.get("key-name");
+pub struct HashMap<K, V, B = AnonymousBuffer> {
+    fn entry(&mut self, key: K) -> Entry<K, V>;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn get(&self, k: &K) -> Option<&V>;
+    fn contains_key(&self, k: &K) -> bool;
+    fn get_mut(&mut self, k: &K) -> Option<&mut V>;
+    fn insert(&mut self, k: K, v: V) -> Option<V>;
+    fn remove(&mut self, k: &K) -> Option<V>;
+}
 ```
 
 
@@ -44,22 +41,15 @@ Why The Name?
 Ozone, or O<sub>3</sub> is a powerful oxidant (oxidation/reduction is the chemical process of rusting) that is naturally created from O<sub>2</sub> (the stuff we breathe) when a *bolt* of lightning strikes.
 
 
-
-Disclaimer
-----------
-I'm writing this to glean a deeper understanding of persistant storage techniques and to get more experience with Rust. Don't even think about using this in production :)
-
 ## License
 
 Licensed under
 
  * Mozilla Public License 2.0 ([LICENSE](LICENSE) or http://www.mozilla.org/en-US/MPL/2.0/)
 
-at your option.
-
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
+submitted for inclusion in the work by you, as defined in the MPL-2.0
+license, shall be licensed as above, without any additional terms or
 conditions.

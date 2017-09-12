@@ -1,6 +1,6 @@
 
+#[allow(unused_imports)] use std::io::{Result, Write};
 use std::fs::{OpenOptions, remove_file};
-use std::io::{Result, Write};
 use std::path::{Path, PathBuf};
 use memmap::{Mmap, Protection};
 use std::marker::PhantomData;
@@ -168,11 +168,11 @@ fn write_mmap() {
 
 #[test]
 fn create_file_buffer() {
-    let ds: FileBuffer<u8> = FileBuffer::try_new("test.db", 4096).expect("Failed creating file");
+    let _fb: FileBuffer<u8> = FileBuffer::try_new("test.db", 4096).expect("Failed creating file");
 }
 
 #[test]
 fn create_anonymous_buffer() {
-    let ds: AnonymousBuffer<u8> = AnonymousBuffer::try_new(4096).expect("Failed creating file");
+    let _ab: AnonymousBuffer<u8> = AnonymousBuffer::try_new(4096).expect("Failed creating file");
 }
 

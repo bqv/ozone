@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -12,7 +14,7 @@ use buffer::{Buffer, AnonymousBuffer, FileBuffer};
 const INITIAL_SIZE: usize = 256usize;
 const LOAD_FACTOR_PERCENT: usize = 90usize;
 
-struct Elem<K, V>
+pub struct Elem<K, V>
     where K: Eq + Hash + Sized,
           V: Sized
 {
@@ -32,8 +34,119 @@ pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
     capacity: usize,
     resize_threshold: usize,
     mask: u64,
-    phantomK: PhantomData<K>,
-    phantomV: PhantomData<V>,
+    phantom_k: PhantomData<K>,
+    phantom_v: PhantomData<V>,
+}
+
+pub enum Entry<'a, K: 'a, V: 'a>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+pub struct OccupiedEntry<'a, K: 'a, V: 'a>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    elem: &'a mut Elem<K, V>,
+}
+
+pub struct VacantEntry<'a, K: 'a, V: 'a>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    elem: &'a mut Elem<K, V>,
+}
+
+impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    fn or_insert(self, default: V) -> &'a mut V {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(default)
+        }
+    }
+
+    fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(default())
+        }
+    }
+
+    fn key(&self) -> &K {
+        match *self {
+            Entry::Occupied(ref entry) => entry.key(),
+            Entry::Vacant(ref entry) => entry.key()
+        }
+    }
+}
+
+impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    fn key(&self) -> &K {
+        &self.elem.key
+    }
+
+    fn remove_entry(self) -> (K, V) {
+        let mut key: K = unsafe { mem::uninitialized() };
+        let mut value: V = unsafe { mem::uninitialized() };
+        self.elem.hash |= 0x8000000000000000u64;
+        mem::swap(&mut key, &mut self.elem.key);
+        mem::swap(&mut value, &mut self.elem.value);
+        (key, value)
+    }
+
+    fn get(&self) -> &V {
+        &self.elem.value
+    }
+
+    fn get_mut(&mut self) -> &mut V {
+        &mut self.elem.value
+    }
+
+    fn into_mut(self) -> &'a mut V {
+        &mut self.elem.value
+    }
+
+    fn insert(&mut self, value: V) -> V {
+        let mut value = value;
+        mem::swap(&mut value, &mut self.elem.value);
+        value
+    }
+
+    fn remove(&mut self) -> V {
+        let mut value: V = unsafe { mem::uninitialized() };
+        self.elem.hash |= 0x8000000000000000u64;
+        mem::swap(&mut value, &mut self.elem.value);
+        value
+    }
+}
+
+impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
+    where K: Eq + Hash + Sized,
+          V: Sized,
+{
+    fn key(&self) -> &K {
+        &self.elem.key
+    }
+
+    fn into_key(self) -> K {
+        let mut key: K = unsafe { mem::uninitialized() };
+        mem::swap(&mut key, &mut self.elem.key);
+        key
+    }
+
+    fn insert(self, value: V) -> &'a mut V {
+        self.elem.value = value;
+        &mut self.elem.value
+    }
 }
 
 impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
@@ -52,8 +165,8 @@ impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
             capacity: INITIAL_SIZE,
             resize_threshold: ((INITIAL_SIZE * LOAD_FACTOR_PERCENT) as f64 / 100f64) as usize,
             mask: INITIAL_SIZE as u64 - 1,
-            phantomK: PhantomData,
-            phantomV: PhantomData,
+            phantom_k: PhantomData,
+            phantom_v: PhantomData,
         })
     }
 }
@@ -78,8 +191,8 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
             capacity: INITIAL_SIZE,
             resize_threshold: ((INITIAL_SIZE * LOAD_FACTOR_PERCENT) as f64 / 100f64) as usize,
             mask: INITIAL_SIZE as u64 - 1,
-            phantomK: PhantomData,
-            phantomV: PhantomData,
+            phantom_k: PhantomData,
+            phantom_v: PhantomData,
         })
     }
 }
@@ -92,7 +205,7 @@ impl<K, V, B> HashMap<K, V, B>
     pub fn insert(&mut self, key: K, value: V) {
         self.num_elems += 1;
         if self.num_elems >= self.resize_threshold {
-            self.grow();
+            self.grow().unwrap();
         }
         self.insert_helper(Self::hash_key(&key), key, value);
     }
@@ -126,6 +239,18 @@ impl<K, V, B> HashMap<K, V, B>
 
     pub fn len(&self) -> usize {
         self.num_elems
+    }
+
+    pub fn entry(&mut self, key: K) -> Entry<K, V> {
+        if let Some(ix) = self.lookup_index(&key) {
+            Entry::Occupied(OccupiedEntry { elem: &mut self.buffer[ix] })
+        } else {
+            let hash = Self::hash_key(&key);
+            let value = unsafe { mem::uninitialized() };
+            let pos = self.insert_helper(hash, key, value);
+            self.buffer[pos].hash = 0;
+            Entry::Vacant(VacantEntry { elem: &mut self.buffer[pos] })
+        }
     }
 }
 
@@ -206,7 +331,7 @@ impl<K, V, B> HashMap<K, V, B>
         self.buffer[ix] = Elem { key: key, value: val, hash: hash };
     }
 
-    fn insert_helper(&mut self, mut hash: u64, mut key: K, mut val: V) {
+    fn insert_helper(&mut self, mut hash: u64, mut key: K, mut val: V) -> usize {
         let mut pos = self.desired_pos(hash);
         let mut dist = 0;
         loop {
@@ -232,6 +357,7 @@ impl<K, V, B> HashMap<K, V, B>
             pos = (pos + 1) & self.mask as usize;
             dist += 1;
         }
+        pos
     }
 
     fn lookup_index(&self, key: &K) -> Option<usize> {
@@ -267,7 +393,7 @@ impl<K, V, B> HashMap<K, V, B>
 
 #[test]
 fn create_hashmap() {
-    let h: HashMap<String, String> = HashMap::new();
+    let _h: HashMap<String, String> = HashMap::new();
 }
 
 #[test]
