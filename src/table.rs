@@ -7,16 +7,17 @@ use std::cmp::Eq;
 use std::io::Result;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::mem;
+use std::{mem, fmt, process};
 
 use buffer::{Buffer, AnonymousBuffer, FileBuffer};
 
-const INITIAL_SIZE: usize = 256usize;
+const INITIAL_SIZE: usize = 256usize; // Must be a power of 2
 const LOAD_FACTOR_PERCENT: usize = 90usize;
 
+#[derive(Debug)]
 pub struct Elem<K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug
 {
     key: K,
     value: V,
@@ -24,10 +25,9 @@ pub struct Elem<K, V>
 }
 
 pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
           B: Buffer<Elem<K, V>>
-
 {
     buffer: B,
     num_elems: usize,
@@ -39,30 +39,30 @@ pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
 }
 
 pub enum Entry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
 }
 
 pub struct OccupiedEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     elem: &'a mut Elem<K, V>,
 }
 
 pub struct VacantEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     elem: &'a mut Elem<K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
@@ -87,8 +87,8 @@ impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
 }
 
 impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -130,8 +130,8 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
 }
 
 impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -144,14 +144,17 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
     }
 
     pub fn insert(self, value: V) -> &'a mut V {
-        self.elem.value = value;
+        let mut value = value;
+        mem::swap(&mut self.elem.value, &mut value); 
+        mem::forget(value);
+        self.elem.hash = HashMap::<K, V>::hash_key(&self.elem.key);
         &mut self.elem.value
     }
 }
 
 impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     pub fn new() -> Self {
         Self::try_new().unwrap()
@@ -172,8 +175,8 @@ impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
 }
 
 impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
 {
     pub fn new_with_file<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
@@ -198,16 +201,17 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
           B: Buffer<Elem<K, V>>
 {
     pub fn insert(&mut self, key: K, value: V) {
-        self.num_elems += 1;
-        if self.num_elems >= self.resize_threshold {
-            self.grow().unwrap();
-        }
-        self.insert_helper(Self::hash_key(&key), key, value);
+        self.try_insert(key, value).unwrap()
+    }
+
+    pub fn try_insert(&mut self, key: K, value: V) -> Result<()> {
+        self.try_insert_with_hash(Self::hash_key(&key), key, value)?;
+        Ok(())
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
@@ -246,8 +250,8 @@ impl<K, V, B> HashMap<K, V, B>
             Entry::Occupied(OccupiedEntry { elem: &mut self.buffer[ix] })
         } else {
             let hash = Self::hash_key(&key);
-            let value = unsafe { mem::uninitialized() };
-            let pos = self.insert_helper(hash, key, value);
+            let value = unsafe { mem::zeroed() };
+            let pos = self.insert_with_hash(hash, key, value);
             self.buffer[pos].hash = 0;
             Entry::Vacant(VacantEntry { elem: &mut self.buffer[pos] })
         }
@@ -260,11 +264,23 @@ impl<K, V, B> HashMap<K, V, B>
     pub fn contains_key(&self, key: &K) -> bool {
         self.get(key).is_some()
     }
+
+    pub fn iter<'a>(&'a self) -> Iter<'a, K, V, B> {
+        Iter { map: &self, ix: 0 }
+    }
+
+    pub fn keys<'a>(&'a self) -> Keys<'a, K, V, B> {
+        Keys { map: &self, ix: 0 }
+    }
+
+    pub fn values<'a>(&'a self) -> Values<'a, K, V, B> {
+        Values { map: &self, ix: 0 }
+    }
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
           B: Buffer<Elem<K, V>>
 {
     fn hash_key(key: &K) -> u64 {
@@ -301,8 +317,20 @@ impl<K, V, B> HashMap<K, V, B>
         &mut self.buffer[ix].hash
     }
 
+    fn insert_with_hash(&mut self, hash: u64, key: K, value: V) -> usize {
+        self.try_insert_with_hash(hash, key, value).unwrap()
+    }
+
+    fn try_insert_with_hash(&mut self, hash: u64, key: K, value: V) -> Result<usize> {
+        self.num_elems += 1;
+        if self.num_elems >= self.resize_threshold {
+            self.grow()?;
+        }
+        Ok(self.insert_helper(hash, key, value))
+    }
+
     fn alloc(&mut self) -> Result<()> {
-        self.buffer = self.buffer.resize(self.capacity * mem::size_of::<Elem<K, V>>())?;
+        self.buffer = self.buffer.new_sized(self.capacity * mem::size_of::<Elem<K, V>>())?;
 
         for i in 0..self.capacity {
             let mut hash = self.elem_hash_mut(i);
@@ -323,12 +351,14 @@ impl<K, V, B> HashMap<K, V, B>
         self.alloc()?;
 
         for i in 0..old_capacity {
-            let ref mut old_elem = old_buffer[i];
-            let mut e = Elem { key: unsafe { mem::uninitialized() }, value: unsafe { mem::uninitialized() }, hash: 0 };
-            mem::swap(old_elem, &mut e);
-            let hash = e.hash;
+            let old_elem = &mut old_buffer[i];
+            let hash = old_elem.hash;
             if hash != 0 && !Self::is_deleted(hash) {
-                self.insert_helper(hash, e.key, e.value);
+                let k: K = unsafe { mem::uninitialized() };
+                let v: V = unsafe { mem::uninitialized() };
+                let ix = self.insert_helper(hash, k, v);
+                let new_elem = &mut self.buffer[ix];
+                mem::swap(old_elem, new_elem);
             }
         }
 
@@ -342,10 +372,15 @@ impl<K, V, B> HashMap<K, V, B>
     fn insert_helper(&mut self, mut hash: u64, mut key: K, mut val: V) -> usize {
         let mut pos = self.desired_pos(hash);
         let mut dist = 0;
+        let mut ix = 0;
+        let mut first = true;
         loop {
             let elem_hash = *self.elem_hash(pos);
             if elem_hash == 0u64 {
                 self.construct(pos, hash, key, val);
+                if first {
+                    ix = pos;
+                }
                 break;
             }
 
@@ -353,9 +388,16 @@ impl<K, V, B> HashMap<K, V, B>
             if existing_elem_probe_dist < dist {
                 if Self::is_deleted(elem_hash) {
                     self.construct(pos, hash, key, val);
+                    if first {
+                        ix = pos;
+                    }
                     break;
                 }
 
+                if first {
+                    ix = pos;
+                    first = false;
+                }
                 mem::swap(&mut hash, self.elem_hash_mut(pos));
                 mem::swap(&mut key, &mut self.buffer[pos].key);
                 mem::swap(&mut val, &mut self.buffer[pos].value);
@@ -365,7 +407,7 @@ impl<K, V, B> HashMap<K, V, B>
             pos = (pos + 1) & self.mask as usize;
             dist += 1;
         }
-        pos
+        ix
     }
 
     fn lookup_index(&self, key: &K) -> Option<usize> {
@@ -399,6 +441,106 @@ impl<K, V, B> HashMap<K, V, B>
     }
 }
 
+pub struct Iter<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    map: &'a HashMap<K, V, B>,
+    ix: usize,
+}
+
+impl<'a, K, V, B> Iterator for Iter<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.ix < self.map.capacity {
+            let hash = *self.map.elem_hash(self.ix);
+            if hash != 0 && !HashMap::<K, V>::is_deleted(hash) {
+                let ref entry = self.map.buffer[self.ix];
+                self.ix += 1;
+                return Some((&entry.key, &entry.value));
+            }
+            self.ix += 1;
+        }
+        None
+    }
+}
+
+pub struct Keys<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    map: &'a HashMap<K, V, B>,
+    ix: usize,
+}
+
+impl<'a, K, V, B> Iterator for Keys<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    type Item = &'a K;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.ix < self.map.capacity {
+            let hash = *self.map.elem_hash(self.ix);
+            if hash != 0 && !HashMap::<K, V>::is_deleted(hash) {
+                let ref entry = self.map.buffer[self.ix];
+                self.ix += 1;
+                return Some(&entry.key);
+            }
+            self.ix += 1;
+        }
+        None
+    }
+}
+
+pub struct Values<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    map: &'a HashMap<K, V, B>,
+    ix: usize,
+}
+
+impl<'a, K, V, B> Iterator for Values<'a, K, V, B>
+    where K: 'a + Eq + Hash + Sized + fmt::Debug,
+          V: 'a + Sized + fmt::Debug,
+          B: 'a + Buffer<Elem<K, V>>
+{
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.ix < self.map.capacity {
+            let hash = *self.map.elem_hash(self.ix);
+            if hash != 0 && !HashMap::<K, V>::is_deleted(hash) {
+                let ref entry = self.map.buffer[self.ix];
+                self.ix += 1;
+                return Some(&entry.value);
+            }
+            self.ix += 1;
+        }
+        None
+    }
+}
+
+impl<K, V, B> fmt::Debug for HashMap<K, V, B>
+    where K: Eq + Hash + Sized + fmt::Debug + fmt::Debug,
+          V: Sized + fmt::Debug + fmt::Debug,
+          B: Buffer<Elem<K, V>>
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_map().entries(self.iter()).finish()
+    }
+}
+
 #[test]
 fn create_hashmap() {
     let _h: HashMap<String, String> = HashMap::new();
@@ -411,5 +553,52 @@ fn insert_and_get_hashmap() {
     let v = "ing".to_string();
     h.insert(k.clone(), v.clone());
     assert_eq!(&v, h.get(&k).unwrap());
+    println!("{:#?}", h);
+}
+
+#[test]
+fn insert_and_iter_hashmap() {
+    let mut h: HashMap<String, String> = HashMap::new();
+    let k = "Test".to_string();
+    let v = "ing".to_string();
+    h.insert(k.clone(), v.clone());
+    let iter = h.iter().collect::<Vec<_>>();
+    assert_eq!(vec![(&k, &v)], iter);
+}
+
+#[test]
+fn entry_or_insert_and_get_hashmap() {
+    let mut h: HashMap<String, String> = HashMap::new();
+    let k = "Test".to_string();
+    let v = "ing".to_string();
+    {
+        let entry = h.entry(k.clone()).or_insert(v.clone());
+        assert_eq!(entry, &v);
+    }
+    assert_eq!(&v, h.get(&k).unwrap());
+}
+
+#[test]
+fn insert_and_remove_hashmap() {
+    let mut h: HashMap<String, String> = HashMap::new();
+    let k = "Test".to_string();
+    let v = "ing".to_string();
+    h.insert(k.clone(), v.clone());
+    h.remove(&k);
+    assert!(h.is_empty());
+    println!("{:#?}", h);
+}
+
+#[test]
+fn entry_or_insert_and_iter_300_hashmap() {
+    let mut h: HashMap<usize, String> = HashMap::new();
+    let v = "Testing".to_string();
+    for k in 0..300 {
+        let entry = h.entry(k).or_insert(v.clone());
+        assert_eq!(entry, &v);
+    }
+    for (a, b) in h.iter() {
+        assert_eq!(b, &v);
+    }
 }
 

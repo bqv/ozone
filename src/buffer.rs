@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 pub trait Buffer<T>: Index<usize, Output = T> + IndexMut<usize> + Clone + Sized
 {
-    fn resize(&self, usize) -> Result<Self>;
+    fn new_sized(&self, usize) -> Result<Self>;
 }
 
 pub struct AnonymousBuffer<T>
@@ -74,7 +74,7 @@ impl<T> Clone for AnonymousBuffer<T>
 impl<T> Buffer<T> for AnonymousBuffer<T>
     where T: Sized
 {
-    fn resize(&self, size: usize) -> Result<Self> {
+    fn new_sized(&self, size: usize) -> Result<Self> {
         Self::try_new(size)
     }
 }
@@ -150,7 +150,7 @@ impl<T> Clone for FileBuffer<T>
 impl<T> Buffer<T> for FileBuffer<T>
     where T: Sized
 {
-    fn resize(&self, size: usize) -> Result<Self> {
+    fn new_sized(&self, size: usize) -> Result<Self> {
         remove_file(self.path.clone())?;
         Self::try_new(self.path.clone(), size)
     }
