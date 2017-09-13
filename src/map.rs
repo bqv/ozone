@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -7,17 +5,16 @@ use std::cmp::Eq;
 use std::io::Result;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::{mem, fmt, process};
+use std::{mem, fmt};
 
 use buffer::{Buffer, AnonymousBuffer, FileBuffer};
 
 const INITIAL_SIZE: usize = 256usize; // Must be a power of 2
 const LOAD_FACTOR_PERCENT: usize = 90usize;
 
-#[derive(Debug)]
 pub struct Elem<K, V>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug
+    where K: Eq + Hash + Sized,
+          V: Sized
 {
     key: K,
     value: V,
@@ -25,8 +22,8 @@ pub struct Elem<K, V>
 }
 
 pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
           B: Buffer<Elem<K, V>>
 {
     buffer: B,
@@ -39,30 +36,30 @@ pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
 }
 
 pub enum Entry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
 }
 
 pub struct OccupiedEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     elem: &'a mut Elem<K, V>,
 }
 
 pub struct VacantEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     elem: &'a mut Elem<K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
@@ -87,8 +84,8 @@ impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
 }
 
 impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -130,8 +127,8 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
 }
 
 impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -153,8 +150,8 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
 }
 
 impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     pub fn new() -> Self {
         Self::try_new().unwrap()
@@ -162,7 +159,7 @@ impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
 
     pub fn try_new() -> Result<Self> {
         let buffer = AnonymousBuffer::try_new(INITIAL_SIZE * mem::size_of::<Elem<K, V>>())?;
-        Ok(HashMap {
+        let mut h = HashMap {
             buffer: buffer,
             num_elems: 0,
             capacity: INITIAL_SIZE,
@@ -170,13 +167,18 @@ impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
             mask: INITIAL_SIZE as u64 - 1,
             phantom_k: PhantomData,
             phantom_v: PhantomData,
-        })
+        };
+        for i in 0..h.capacity {
+            let mut hash = h.elem_hash_mut(i);
+            *hash = 0;
+        }
+        Ok(h)
     }
 }
 
 impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
 {
     pub fn new_with_file<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
@@ -188,7 +190,7 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
         where P: AsRef<Path> + Clone
     {
         let buffer = FileBuffer::try_new(path, INITIAL_SIZE * mem::size_of::<Elem<K, V>>())?;
-        Ok(HashMap {
+        let mut h = HashMap {
             buffer: buffer,
             num_elems: 0,
             capacity: INITIAL_SIZE,
@@ -196,13 +198,18 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
             mask: INITIAL_SIZE as u64 - 1,
             phantom_k: PhantomData,
             phantom_v: PhantomData,
-        })
+        };
+        for i in 0..h.capacity {
+            let mut hash = h.elem_hash_mut(i);
+            *hash = 0;
+        }
+        Ok(h)
     }
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
           B: Buffer<Elem<K, V>>
 {
     pub fn insert(&mut self, key: K, value: V) {
@@ -230,6 +237,14 @@ impl<K, V, B> HashMap<K, V, B>
         }
     }
 
+    pub fn get_key(&self, key: &K) -> Option<&K> {
+        if let Some(ix) = self.lookup_index(key) {
+            Some(&self.buffer[ix].key)
+        } else {
+            None
+        }
+    }
+
     pub fn remove(&mut self, key: &K) -> bool {
         if let Some(ix) = self.lookup_index(key) {
             self.num_elems -= 1;
@@ -250,7 +265,7 @@ impl<K, V, B> HashMap<K, V, B>
             Entry::Occupied(OccupiedEntry { elem: &mut self.buffer[ix] })
         } else {
             let hash = Self::hash_key(&key);
-            let value = unsafe { mem::zeroed() };
+            let value = unsafe { mem::uninitialized() };
             let pos = self.insert_with_hash(hash, key, value);
             self.buffer[pos].hash = 0;
             Entry::Vacant(VacantEntry { elem: &mut self.buffer[pos] })
@@ -276,11 +291,15 @@ impl<K, V, B> HashMap<K, V, B>
     pub fn values<'a>(&'a self) -> Values<'a, K, V, B> {
         Values { map: &self, ix: 0 }
     }
+
+    //pub fn drain<'a>(&'a mut self) -> Drain<'a, K, V, B> { }
+
+    //pub fn clear(&mut self) { }
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: Eq + Hash + Sized,
+          V: Sized,
           B: Buffer<Elem<K, V>>
 {
     fn hash_key(key: &K) -> u64 {
@@ -344,6 +363,7 @@ impl<K, V, B> HashMap<K, V, B>
     }
 
     fn grow(&mut self) -> Result<()> {
+        println!("Growing...");
         let mut old_buffer = self.buffer.clone();
         let old_capacity = self.capacity;
 
@@ -442,8 +462,8 @@ impl<K, V, B> HashMap<K, V, B>
 }
 
 pub struct Iter<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -451,8 +471,8 @@ pub struct Iter<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Iter<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = (&'a K, &'a V);
@@ -472,8 +492,8 @@ impl<'a, K, V, B> Iterator for Iter<'a, K, V, B>
 }
 
 pub struct Keys<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -481,8 +501,8 @@ pub struct Keys<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Keys<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = &'a K;
@@ -502,8 +522,8 @@ impl<'a, K, V, B> Iterator for Keys<'a, K, V, B>
 }
 
 pub struct Values<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -511,8 +531,8 @@ pub struct Values<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Values<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized + fmt::Debug,
-          V: 'a + Sized + fmt::Debug,
+    where K: 'a + Eq + Hash + Sized,
+          V: 'a + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = &'a V;
@@ -532,8 +552,8 @@ impl<'a, K, V, B> Iterator for Values<'a, K, V, B>
 }
 
 impl<K, V, B> fmt::Debug for HashMap<K, V, B>
-    where K: Eq + Hash + Sized + fmt::Debug + fmt::Debug,
-          V: Sized + fmt::Debug + fmt::Debug,
+    where K: Eq + Hash + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
           B: Buffer<Elem<K, V>>
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -597,7 +617,7 @@ fn entry_or_insert_and_iter_300_hashmap() {
         let entry = h.entry(k).or_insert(v.clone());
         assert_eq!(entry, &v);
     }
-    for (a, b) in h.iter() {
+    for (_, b) in h.iter() {
         assert_eq!(b, &v);
     }
 }

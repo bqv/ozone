@@ -1,6 +1,6 @@
 
 #[allow(unused_imports)] use std::io::{Result, Write};
-use std::fs::{OpenOptions, remove_file};
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use memmap::{Mmap, Protection};
 use std::marker::PhantomData;
@@ -98,7 +98,6 @@ impl<T> FileBuffer<T>
             .write(true)
             .create(true)
             .open(&path)?;
-        file.set_len(0)?;
         file.set_len(size as u64)?;
         let map = Mmap::open_path(path.clone(), Protection::ReadWrite)?;
         Ok(Self { data: Arc::new(Mutex::new(map)), path: path.as_ref().to_owned(), phantom: PhantomData })
@@ -151,7 +150,6 @@ impl<T> Buffer<T> for FileBuffer<T>
     where T: Sized
 {
     fn new_sized(&self, size: usize) -> Result<Self> {
-        remove_file(self.path.clone())?;
         Self::try_new(self.path.clone(), size)
     }
 }
