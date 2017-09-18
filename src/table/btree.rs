@@ -24,7 +24,7 @@ pub struct Node<K>
 
 #[derive(Debug)]
 pub struct Bucket<V>
-    where V: Sized + fmt::Debug,
+    where V: Copy + Sized + fmt::Debug,
 {
     values: [V; 1]
 }
@@ -32,7 +32,7 @@ pub struct Bucket<V>
 #[derive(Debug)]
 struct Meta<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     start: *mut Block<K, V>,
     next: isize,
@@ -43,7 +43,7 @@ struct Meta<K, V>
 #[derive(Debug)]
 enum Block<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     Free(Free),
     Node(Node<K>),
@@ -53,7 +53,7 @@ enum Block<K, V>
 
 impl<K, V> Block<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     fn as_free(&self) -> &Free {
         match *self {
@@ -130,20 +130,20 @@ impl<K, V> Block<K, V>
 
 pub struct BTree<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     meta: Block<K, V>,
 }
 
 impl<K, V> BTree<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
 }
 
 impl<K, V> BTree<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     #[inline]
     unsafe fn is_leaf(node: *const Block<K, V>) -> bool {
@@ -236,7 +236,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn find_leaf(&self, key: &K) -> Option<*const Block<K, V>> {
-        println!("find_leaf");
         let mut i = 0usize;
         let mut c = self.meta.as_meta().start.offset(self.meta.as_meta().root) as *const _;
         while !Self::is_leaf(c) {
@@ -257,7 +256,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn find_leaf_mut(&mut self, key: &K) -> Option<*mut Block<K, V>> {
-        println!("find_leaf_mut");
         let mut i = 0usize;
         let mut c = self.meta.as_meta().start.offset(self.meta.as_meta().root);
         while !Self::is_leaf(c) {
@@ -309,7 +307,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn find_block<'a>(&self, key: &K) -> Option<&'a Block<K, V>> {
-        println!("find_block {:?}", *key);
         let mut i = 0;
         if let Some(mut c) = self.find_leaf(key) {
             for j in 0..Self::num_keys(c) {
@@ -329,7 +326,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn find_block_mut<'a>(&mut self, key: &K) -> Option<&'a mut Block<K, V>> {
-        println!("find_block_mut {:?}", *key);
         let mut i = 0;
         if let Some(mut c) = self.find_leaf_mut(key) {
             for j in 0..Self::num_keys(c) {
@@ -363,10 +359,9 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn make_node(&mut self) -> isize {
-        println!("make_node");
         let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
         if new_next > self.meta.as_meta().end {
-            unimplemented!()
+            unreachable!()
         } else {
             let next = self.meta.as_meta().start.offset(self.meta.as_meta().next);
             self.meta.as_meta_mut().next = (*next).as_free().next;
@@ -383,10 +378,9 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn make_leaf(&mut self) -> isize {
-        println!("make_leaf");
         let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
         if new_next > self.meta.as_meta().end {
-            unimplemented!()
+            unreachable!()
         } else {
             let next = self.meta.as_meta().start.offset(self.meta.as_meta().next);
             self.meta.as_meta_mut().next = (*next).as_free().next;
@@ -404,9 +398,8 @@ impl<K, V> BTree<K, V>
 
     unsafe fn make_bucket(&mut self) -> isize {
         let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
-        println!("make_bucket");
         if new_next > self.meta.as_meta().end {
-            unimplemented!()
+            unreachable!()
         } else {
             let next = self.meta.as_meta().start.offset(self.meta.as_meta().next);
             self.meta.as_meta_mut().next = (*next).as_free().next;
@@ -427,7 +420,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn insert_into_leaf(&mut self, leaf: *mut Block<K, V>, key: K, value: *mut Block<K, V>) {
-        println!("insert_into_leaf {:?} {:?} {:?}", *leaf, key, *value);
         let mut insertion_point = 0;
         while insertion_point < Self::num_keys(leaf) as usize && *Self::nth_key(leaf, insertion_point) < key {
             insertion_point += 1;
@@ -450,7 +442,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn split_and_insert_into_leaf(&mut self, leaf: *mut Block<K, V>, key: K, value: *mut Block<K, V>) {
-        println!("split_and_insert_into_leaf {:?}", key);
         let mut temp_keys: [K; ORDER] = mem::uninitialized();
         let mut temp_ptrs: [isize; ORDER] = mem::uninitialized();
 
@@ -519,7 +510,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn insert_into_node(&mut self, n: *mut Block<K, V>, left_index: usize, key: K, right: *mut Block<K, V>) {
-        println!("insert_into_node {:?} {:?}", *n, *right);
         for i in (left_index..Self::num_keys(n) as usize).rev() {
             let k_old = Self::nth_key_mut(n, i + 1);
             let k_new = Self::nth_key_mut(n, i + 0);
@@ -537,7 +527,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn split_and_insert_into_node(&mut self, old_node: *mut Block<K, V>, left_index: usize, key: K, right: *mut Block<K, V>) {
-        println!("split_and_insert_into_node {:?} {} {:?} {:?}", *old_node, left_index, key, *right);
         let mut temp_ptrs: [isize; ORDER + 1] = mem::uninitialized();
         let mut temp_keys: [K; ORDER] = mem::uninitialized();
         let nk = Self::num_keys(old_node as *const _) as usize;
@@ -599,7 +588,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn insert_into_parent(&mut self, left: *mut Block<K, V>, key: K, right: *mut Block<K, V>) {
-        println!("insert_into_parent {:?} {:?} {:?}", *left, key, *right);
         let parent = Self::parent(left);
         if parent.is_none() {
             self.insert_into_new_root(left, key, right)
@@ -616,7 +604,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn insert_into_new_root(&mut self, left: *mut Block<K, V>, key: K, right: *mut Block<K, V>) {
-        println!("insert_into_new_root {:?}", key);
         let root = self.make_node();
         let prnt = Self::parent_mut(left);
         *prnt = Some(root);
@@ -638,7 +625,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn start_new_tree(&mut self, key: K, value: *mut Block<K, V>) {
-        println!("start_new_tree");
         let root = self.make_leaf();
         self.meta.as_meta_mut().root = root;
         let root = self.meta.as_meta_mut().start.offset(root);
@@ -655,7 +641,6 @@ impl<K, V> BTree<K, V>
         for i in 0..(Self::num_keys(nparent) as usize + 1) {
             let neighbour = Self::nth_ptr(nparent, i);
             if self.meta.as_meta().start.offset(*neighbour) == n {
-                println!("got neighbour index {:?}", i as isize - 1);
                 return if i == 0 { None } else { Some(i - 1) };
             }
         }
@@ -663,7 +648,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn remove_entry_from_node(&mut self, n: *mut Block<K, V>, key: &K, value: *mut Block<K, V>) -> usize {
-        println!("remove_entry_from_node");
         let mut key_ix = 0;
         for i in 0..Self::num_keys(n) as usize {
             if *Self::nth_key(n, i) == *key {
@@ -709,7 +693,6 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn adjust_root(&mut self) {
-        println!("adjust_root");
         let root = self.meta.as_meta_mut().start.offset(self.meta.as_meta().root);
         if Self::num_keys(root) == 0 {
             if Self::is_leaf(root) {
@@ -726,9 +709,7 @@ impl<K, V> BTree<K, V>
     }
 
     unsafe fn merge_nodes(&mut self, mut n: *mut Block<K, V>, mut neighbour: *mut Block<K, V>, neighbour_index: Option<usize>, pivot: *const K) {
-        println!("merge_nodes {:?} {:?} {:?} {:?}", *n, *neighbour, neighbour_index, *pivot);
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("Before merge: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
         if neighbour_index.is_none() {
             let tmp = n;
@@ -785,7 +766,6 @@ impl<K, V> BTree<K, V>
             *p_old = *p_new;
         }
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("In merge: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
 
         let parent = self.meta.as_meta().start.offset(Self::parent(n).unwrap());
@@ -793,14 +773,11 @@ impl<K, V> BTree<K, V>
         *n = Block::Free(Free { next: self.meta.as_meta().next });
         self.meta.as_meta_mut().next = Self::offset_to(self.meta.as_meta().start, n);
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("After merge: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
     }
 
     unsafe fn redistribute_nodes(&mut self, n: *mut Block<K, V>, neighbour: *mut Block<K, V>, neighbour_index: Option<usize>, pivot_index: usize, pivot: *const K) {
-        println!("redistribute_nodes {:?} {:?} {:?} {} {:?}", *n, *neighbour, neighbour_index, pivot_index, *pivot);
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("Before redistribute_nodes: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
         if neighbour_index.is_some() {
             let nk = Self::num_keys(n) as usize;
@@ -818,7 +795,6 @@ impl<K, V> BTree<K, V>
                 *p_old = *p_new;
             }
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("In redistribute_nodes: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
             let nk = Self::num_keys(neighbour) as usize;
             if !Self::is_leaf(n) {
@@ -854,7 +830,6 @@ impl<K, V> BTree<K, V>
         } else {
             let nk = Self::num_keys(n) as usize;
             if Self::is_leaf(n) {
-                println!("is leaf");
                 let k_old = Self::nth_key_mut(n, nk);
                 let k_new = Self::nth_key_mut(neighbour, 0);
                 *k_old = *k_new;
@@ -866,7 +841,6 @@ impl<K, V> BTree<K, V>
                 let nkey1 = Self::nth_key_mut(neighbour, 1);
                 *keyn = *nkey1;
             } else {
-                println!("is not leaf");
                 let keyn = Self::nth_key_mut(n, nk);
                 *keyn = *pivot;
                 let p_old = Self::nth_ptr_mut(n, nk + 1);
@@ -878,11 +852,9 @@ impl<K, V> BTree<K, V>
                 *keyn = *nkey0
             }
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("In redistribute_nodes: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
             let nk = Self::num_keys(neighbour) as usize;
             for i in 0..(nk - 1) {
-                println!("neighbour keys = {}", Self::num_keys(neighbour));
                 let k_old = Self::nth_key_mut(neighbour, i);
                 let k_new = Self::nth_key_mut(neighbour, i + 1);
                 *k_old = *k_new;
@@ -891,7 +863,6 @@ impl<K, V> BTree<K, V>
                 *p_old = *p_new;
             }
             if !Self::is_leaf(n) {
-                println!("is not leaf");
                 let p_old = Self::nth_ptr_mut(neighbour, nk - 1);
                 let p_new = Self::nth_ptr_mut(neighbour, nk);
                 *p_old = *p_new;
@@ -908,14 +879,11 @@ impl<K, V> BTree<K, V>
             *oldparent = Some(Self::offset_to(self.meta.as_meta().start, n));
         }
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("After redistribute_nodes: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
     }
 
     unsafe fn delete_entry(&mut self, n: *mut Block<K, V>, key: &K, value: *mut Block<K, V>) {
-        println!("delete_entry {:?} {:?} {:?}", *n, key, *value);
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("Before delete_entry: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
         let ix = self.remove_entry_from_node(n, key, value);
 
@@ -924,18 +892,14 @@ impl<K, V> BTree<K, V>
             return;
         } 
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("In delete_entry: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
         }
 
         if ix == 0 && n != self.meta.as_meta().start.offset(self.meta.as_meta().root) {
-            println!("Deleted smallest node, repairing tree");
             let mut parent = self.meta.as_meta().start.offset(Self::parent(n).unwrap());
-            println!("Found parent {:?}", *parent);
             let mut parent_ix = 0;
             while self.meta.as_meta().start.offset(*Self::nth_ptr(parent, parent_ix)) != n {
                 parent_ix += 1;
             }
-            println!("Found index {:?}", parent_ix);
             let mut next_smallest = if Self::num_keys(n) == 0 {
                 if parent_ix == Self::num_keys(parent) as usize {
                     None
@@ -950,7 +914,6 @@ impl<K, V> BTree<K, V>
                 loop {
                     if parent_ix > 0 {
                         let parent_key = Self::nth_key_mut(parent, parent_ix - 1);
-                        println!("Got parent key {:?}", *parent_key);
                         if *parent_key == *key {
                             *parent_key = replacement;
                         }
@@ -970,7 +933,6 @@ impl<K, V> BTree<K, V>
         }
         let min_keys = Self::cut(ORDER) - 1;
         if (Self::num_keys(n) as usize) < min_keys {
-            println!("minimum Reached for {:?}", *n);
             let neighbour_index = self.get_neighbour_index(n);
             let pivot_idx = neighbour_index.unwrap_or(0);
             let nparent = self.meta.as_meta().start.offset(Self::parent(n).unwrap());
@@ -986,12 +948,46 @@ impl<K, V> BTree<K, V>
             }
         }
         for i in 0..Self::offset_to(self.meta.as_meta().start, self.meta.as_meta().end) {
-            println!("After delete_entry: {}: {:?}", i, *self.meta.as_meta_mut().start.offset(i));
+        }
+    }
+    
+    pub fn pop_front(&mut self) -> Option<(K, V)> {
+        unsafe {
+            if self.is_empty() {
+                None
+            } else {
+                let mut node = self.meta.as_meta().start.offset(self.meta.as_meta().root);
+                while !Self::is_leaf(node) {
+                    node = self.meta.as_meta().start.offset(*Self::nth_ptr(node, 0));
+                }
+                let key = *Self::nth_key(node, 0);
+                let bucket = self.meta.as_meta().start.offset(*Self::nth_ptr(node, 0));
+                let value = (*bucket).as_bucket().values[0];
+                self.delete(&key);
+                Some((key, value))
+            }
+        }
+    }
+    
+    pub fn pop_back(&mut self) -> Option<(K, V)> {
+        unsafe {
+            if self.is_empty() {
+                None
+            } else {
+                let mut node = self.meta.as_meta().start.offset(self.meta.as_meta().root);
+                while !Self::is_leaf(node) {
+                    node = self.meta.as_meta().start.offset(*Self::nth_ptr(node, Self::num_keys(node) as usize - 1));
+                }
+                let key = *Self::nth_key(node, 0);
+                let bucket = self.meta.as_meta().start.offset(*Self::nth_ptr(node, 0));
+                let value = (*bucket).as_bucket().values[0];
+                self.delete(&key);
+                Some((key, value))
+            }
         }
     }
 
-    pub fn delete(&mut self, key: &K) {
-        println!("delete");
+    pub fn delete(&mut self, key: &K) -> bool {
         unsafe {
             if let Some(key_record) = self.find_block_mut(key) {
                 if let Some(key_leaf) = self.find_leaf_mut(key) {
@@ -999,28 +995,36 @@ impl<K, V> BTree<K, V>
                     self.delete_entry(key_leaf, key, value);
                     *value = Block::Free(Free { next: self.meta.as_meta().next });
                     self.meta.as_meta_mut().next = Self::offset_to(self.meta.as_meta().start, value);
+                    return true;
                 }
             }
+            return false;
         }
     }
 
-    pub fn insert(&mut self, key: K, value: V) {
-        println!("insert {:?} {:?}", key, value);
+    pub fn insert(&mut self, key: K, value: V) -> bool {
         unsafe {
-            if self.meta.as_meta().root == 0 {
+            if self.is_empty() {
                 let block = self.meta.as_meta_mut().start.offset(self.make_bucket());
                 (*block).as_bucket_mut().values[0] = value;
                 self.start_new_tree(key, block);
+                true
             } else if self.find_block(&key).is_none() {
-                let block = self.meta.as_meta_mut().start.offset(self.make_bucket());
-                (*block).as_bucket_mut().values[0] = value;
-                let leaf = self.find_leaf_mut(&key).unwrap();
-                println!("found leaf {:?}", *leaf);
-                if (Self::num_keys(leaf) as usize + 1) < ORDER {
-                    self.insert_into_leaf(leaf, key, block);
+                if self.is_full() {
+                    false
                 } else {
-                    self.split_and_insert_into_leaf(leaf, key, block);
+                    let block = self.meta.as_meta_mut().start.offset(self.make_bucket());
+                    (*block).as_bucket_mut().values[0] = value;
+                    let leaf = self.find_leaf_mut(&key).unwrap();
+                    if (Self::num_keys(leaf) as usize + 1) < ORDER {
+                        self.insert_into_leaf(leaf, key, block);
+                    } else {
+                        self.split_and_insert_into_leaf(leaf, key, block);
+                    }
+                    true
                 }
+            } else {
+                true
             }
         }
     }
@@ -1039,6 +1043,12 @@ impl<K, V> BTree<K, V>
 
     pub fn is_empty(&self) -> bool {
         self.meta.as_meta().root == 0
+    }
+
+    pub fn is_full(&self) -> bool {
+        unsafe {
+            self.meta.as_meta().start.offset(self.meta.as_meta().next + 1) > self.meta.as_meta().end
+        }
     }
 
     pub fn load_from_buffer<'a, T>(data: &mut T) -> &'a mut Self {
@@ -1072,7 +1082,7 @@ impl<K, V> BTree<K, V>
 
 impl<K, V> fmt::Debug for BTree<K, V>
     where K: PartialOrd + Copy + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+          V: Copy + Sized + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         unsafe {

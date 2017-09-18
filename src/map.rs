@@ -180,13 +180,13 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
     where K: Eq + Hash + Sized,
           V: Sized,
 {
-    pub fn new_with_file<P>(path: P) -> Self
+    pub fn new<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
     {
-        Self::try_new_with_file(path).unwrap()
+        Self::try_new(path).unwrap()
     }
 
-    pub fn try_new_with_file<P>(path: P) -> Result<Self>
+    pub fn try_new<P>(path: P) -> Result<Self>
         where P: AsRef<Path> + Clone
     {
         let buffer = FileBuffer::try_new(path, INITIAL_SIZE * mem::size_of::<Elem<K, V>>())?;
@@ -563,12 +563,12 @@ impl<K, V, B> fmt::Debug for HashMap<K, V, B>
 
 #[test]
 fn create_hashmap() {
-    let _h: HashMap<String, String> = HashMap::new();
+    let _h: HashMap<String, String> = HashMap::<String, String>::new();
 }
 
 #[test]
 fn insert_and_get_hashmap() {
-    let mut h: HashMap<String, String> = HashMap::new();
+    let mut h: HashMap<String, String> = HashMap::<String, String>::new();
     let k = "Test".to_string();
     let v = "ing".to_string();
     h.insert(k.clone(), v.clone());
@@ -578,7 +578,7 @@ fn insert_and_get_hashmap() {
 
 #[test]
 fn insert_and_iter_hashmap() {
-    let mut h: HashMap<String, String> = HashMap::new();
+    let mut h: HashMap<String, String> = HashMap::<String, String>::new();
     let k = "Test".to_string();
     let v = "ing".to_string();
     h.insert(k.clone(), v.clone());
@@ -588,7 +588,7 @@ fn insert_and_iter_hashmap() {
 
 #[test]
 fn entry_or_insert_and_get_hashmap() {
-    let mut h: HashMap<String, String> = HashMap::new();
+    let mut h: HashMap<String, String> = HashMap::<String, String>::new();
     let k = "Test".to_string();
     let v = "ing".to_string();
     {
@@ -600,7 +600,7 @@ fn entry_or_insert_and_get_hashmap() {
 
 #[test]
 fn insert_and_remove_hashmap() {
-    let mut h: HashMap<String, String> = HashMap::new();
+    let mut h: HashMap<String, String> = HashMap::<String, String>::new();
     let k = "Test".to_string();
     let v = "ing".to_string();
     h.insert(k.clone(), v.clone());
@@ -611,7 +611,7 @@ fn insert_and_remove_hashmap() {
 
 #[test]
 fn entry_or_insert_and_iter_300_hashmap() {
-    let mut h: HashMap<usize, String> = HashMap::new();
+    let mut h: HashMap<usize, String> = HashMap::<usize, String>::new();
     let v = "Testing".to_string();
     for k in 0..300 {
         let entry = h.entry(k).or_insert(v.clone());

@@ -19,12 +19,12 @@ impl<T> HashSet<T, AnonymousBuffer<Elem<T, ()>>>
     where T: Eq + Hash + Sized,
 {
     pub fn new() -> Self {
-        let map = HashMap::new();
+        let map = HashMap::<T, (), AnonymousBuffer<Elem<T, ()>>>::new();
         Self { map: map }
     }
 
     pub fn try_new() -> Result<Self> {
-        let map = HashMap::try_new()?;
+        let map = HashMap::<T, (), AnonymousBuffer<Elem<T, ()>>>::try_new()?;
         Ok(Self { map: map })
     }
 }
@@ -32,17 +32,17 @@ impl<T> HashSet<T, AnonymousBuffer<Elem<T, ()>>>
 impl<T> HashSet<T, FileBuffer<Elem<T, ()>>>
     where T: Eq + Hash + Sized,
 {
-    pub fn new_with_file<P>(path: P) -> Self
+    pub fn new<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
     {
-        let map = HashMap::new_with_file(path);
+        let map = HashMap::<T, (), FileBuffer<Elem<T, ()>>>::new(path);
         Self { map: map }
     }
 
-    pub fn try_new_with_file<P>(path: P) -> Result<Self>
+    pub fn try_new<P>(path: P) -> Result<Self>
         where P: AsRef<Path> + Clone
     {
-        let map = HashMap::try_new_with_file(path)?;
+        let map = HashMap::<T, (), FileBuffer<Elem<T, ()>>>::try_new(path)?;
         Ok(Self { map: map })
     }
 }
