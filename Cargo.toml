@@ -14,3 +14,4 @@ repository = "https://github.com/bqv/ozone"
 
 [dependencies]
 memmap = "0.5.0"
+rand = "0.3.16"

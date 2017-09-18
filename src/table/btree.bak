@@ -1,0 +1,653 @@
+
+use std::{mem, fmt};
+use buffer::{Buffer, AnonymousBuffer, FileBuffer};
+use table::{Page};
+
+const MIN_ORDER: usize = 3;
+const MAX_ORDER: usize = 20;
+const ORDER: usize = 4;
+
+#[derive(Debug)]
+pub struct Node<K>
+    where K: PartialOrd + Sized + fmt::Debug,
+{
+    leaf: bool,
+    key_count: u8,
+	keys: [K; ORDER - 1],
+    ptrs: [isize; ORDER],
+	parent: isize,
+}
+
+#[derive(Debug)]
+pub struct Bucket<V>
+    where V: Sized + fmt::Debug,
+{
+    values: [V; 1]
+}
+
+struct Meta<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+    start: *mut Block<K, V>,
+    next: isize,
+    end: *mut Block<K, V>,
+    root: isize,
+}
+
+enum Block<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+    Node(Node<K>),
+    Bucket(Bucket<V>),
+    Meta(Meta<K, V>),
+}
+
+impl<K, V> Block<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+    fn as_node(&self) -> &Node<K> {
+        match *self {
+            Block::Node(ref node) => node,
+            Block::Bucket(_) => panic!("as_node() called on bucket"),
+            Block::Meta(_) => panic!("as_node() called on meta")
+        }
+    }
+
+    fn as_node_mut(&mut self) -> &mut Node<K> {
+        match *self {
+            Block::Node(ref mut node) => node,
+            Block::Bucket(_) => panic!("as_node_mut() called on bucket"),
+            Block::Meta(_) => panic!("as_node_mut() called on meta")
+        }
+    }
+
+    fn as_bucket(&self) -> &Bucket<V> {
+        match *self {
+            Block::Node(_) => panic!("as_bucket() called on node"),
+            Block::Bucket(ref bucket) => bucket,
+            Block::Meta(_) => panic!("as_bucket() called on meta")
+        }
+    }
+
+    fn as_bucket_mut(&mut self) -> &mut Bucket<V> {
+        match *self {
+            Block::Node(_) => panic!("as_bucket_mut() called on node"),
+            Block::Bucket(ref mut bucket) => bucket,
+            Block::Meta(_) => panic!("as_bucket_mut() called on meta")
+        }
+    }
+
+    fn as_meta(&self) -> &Meta<K, V> {
+        match *self {
+            Block::Node(_) => panic!("as_meta() called on node"),
+            Block::Bucket(_) => panic!("as_meta() called on bucket"),
+            Block::Meta(ref meta) => meta
+        }
+    }
+
+    fn as_meta_mut(&mut self) -> &mut Meta<K, V> {
+        match *self {
+            Block::Node(_) => panic!("as_meta_mut() called on node"),
+            Block::Bucket(_) => panic!("as_meta_mut() called on bucket"),
+            Block::Meta(ref mut meta) => meta
+        }
+    }
+}
+
+pub struct BTree<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+    meta: Block<K, V>,
+}
+
+impl<K, V> BTree<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+}
+
+impl<K, V> BTree<K, V>
+    where K: PartialOrd + Sized + fmt::Debug,
+          V: Sized + fmt::Debug,
+{
+    #[inline]
+    unsafe fn is_leaf(node: *const Block<K, V>) -> bool {
+        match *node {
+            Block::Node(ref node) => node.leaf,
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn parent(node: *const Block<K, V>) -> isize {
+        match *node {
+            Block::Node(ref node) => node.parent,
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn parent_mut(node: *mut Block<K, V>) -> *mut isize {
+        match *node {
+            Block::Node(ref mut node) => &mut node.parent,
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn num_keys(node: *const Block<K, V>) -> u8 {
+        match *node {
+            Block::Node(ref node) => node.key_count,
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn num_keys_mut(node: *mut Block<K, V>) -> *mut u8 {
+        match *node {
+            Block::Node(ref mut node) => &mut node.key_count,
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn nth_key(node: *const Block<K, V>, n: usize) -> *const K {
+        match *node {
+            Block::Node(ref node) => &node.keys[n],
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn nth_key_mut(node: *mut Block<K, V>, n: usize) -> *mut K {
+        match *node {
+            Block::Node(ref mut node) => &mut node.keys[n],
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn nth_ptr(node: *const Block<K, V>, n: usize) -> *const isize {
+        match *node {
+            Block::Node(ref node) => &node.ptrs[n],
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    #[inline]
+    unsafe fn nth_ptr_mut(node: *mut Block<K, V>, n: usize) -> *mut isize {
+        match *node {
+            Block::Node(ref mut node) => &mut node.ptrs[n],
+            Block::Bucket(_) => unreachable!(),
+            Block::Meta(_) => unreachable!()
+        }
+    }
+
+    unsafe fn find_leaf(&self, key: &K) -> *const Block<K, V> {
+        println!("find_leaf");
+        let mut i = 0usize;
+        let mut c = self.meta.as_meta().start.offset(self.meta.as_meta().root) as *const _;
+        while !Self::is_leaf(c) {
+            i = 0;
+            while i < Self::num_keys(c) as usize {
+                if *key >= *Self::nth_key(c, i) {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            c = (self.meta.as_meta().start as *const _).offset(*Self::nth_ptr(c, i));
+        }
+        c
+    }
+
+    unsafe fn find_leaf_mut(&mut self, key: &K) -> *mut Block<K, V> {
+        println!("find_leaf_mut");
+        let mut i = 0usize;
+        let mut c = self.meta.as_meta().start.offset(self.meta.as_meta().root);
+        while !Self::is_leaf(c) {
+            i = 0;
+            while i < Self::num_keys(c) as usize {
+                if *key >= *Self::nth_key(c, i) {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            c = self.meta.as_meta().start.offset(*Self::nth_ptr(c, i));
+        }
+        c
+    }
+
+    unsafe fn find_range<'a>(&self, key_start: Option<&K>, key_end: Option<&K>) -> Vec<&'a Block<K, V>> {
+        //int i, num_found;
+        //num_found = 0;
+        //node * n = find_leaf( root, key_start, verbose );
+        //if (n == NULL) return 0;
+        //for (i = 0; i < n->num_keys && n->keys[i] < key_start; i++) ;
+        //if (i == n->num_keys) return 0;
+        //while (n != NULL) {
+        //    for ( ; i < n->num_keys && n->keys[i] <= key_end; i++) {
+        //        returned_keys[num_found] = n->keys[i];
+        //        returned_pointers[num_found] = n->pointers[i];
+        //        num_found++;
+        //    }
+        //    n = n->pointers[order - 1];
+        //    i = 0;
+        //}
+        //return num_found;
+        unimplemented!()
+    }
+
+    unsafe fn find_block<'a>(&self, key: &K) -> Option<&'a Block<K, V>> {
+        println!("find_block {:?}", *key);
+        let mut i = 0;
+        let mut c = self.find_leaf(key);
+        for j in 0..Self::num_keys(c) {
+            i = j as usize;
+            println!("find_block {}/{} {:?}", j, Self::num_keys(c), *Self::nth_key(c, i));
+            if *Self::nth_key(c, i) == *key {
+                break;
+            }
+        }
+        if *Self::nth_key(c, i) == *key {
+            Some(&*(self.meta.as_meta().start as *const _).offset(*Self::nth_ptr(c, i)))
+        } else {
+            None
+        }
+    }
+
+    fn cut(length: usize) -> usize {
+        if length % 2 == 0 {
+            length / 2
+        } else {
+            length / 2 + 1
+        }
+    }
+
+    #[inline]
+    fn offset_to(from: *const Block<K, V>, to: *const Block<K, V>) -> isize {
+        ((to as isize) - (from as isize)) / mem::size_of::<Block<K, V>>() as isize
+    }
+
+    unsafe fn make_node(&mut self) -> isize {
+        println!("make_node");
+        let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
+        if new_next > self.meta.as_meta().end {
+            unimplemented!()
+        } else {
+            let new_node = &mut*self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next);
+            *new_node = Block::Node( Node {
+                leaf: false,
+                key_count: 0,
+                keys: mem::uninitialized(),
+                ptrs: [0; ORDER],
+                parent: 0,
+            });
+            self.meta.as_meta_mut().next += 1;
+            Self::offset_to(self.meta.as_meta_mut().start as *const _, new_node as *const _)
+        }
+    }
+
+    unsafe fn make_leaf(&mut self) -> isize {
+        println!("make_leaf");
+        let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
+        if new_next > self.meta.as_meta().end {
+            unimplemented!()
+        } else {
+            let new_node = &mut*self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next);
+            *new_node = Block::Node( Node {
+                leaf: true,
+                key_count: 0,
+                keys: mem::uninitialized(),
+                ptrs: [0; ORDER],
+                parent: 0,
+            });
+            self.meta.as_meta_mut().next += 1;
+            Self::offset_to(self.meta.as_meta_mut().start as *const _, new_node as *const _)
+        }
+    }
+
+    unsafe fn make_bucket(&mut self) -> isize {
+        let new_next = self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next + 1);
+        println!("make_bucket");
+        if new_next > self.meta.as_meta().end {
+            unimplemented!()
+        } else {
+            let new_bucket = &mut*self.meta.as_meta_mut().start.offset(self.meta.as_meta_mut().next);
+            *new_bucket = Block::Bucket( Bucket {
+                values: mem::uninitialized(),
+            });
+            self.meta.as_meta_mut().next += 1;
+            Self::offset_to(self.meta.as_meta_mut().start as *const _, new_bucket as *const _)
+        }
+    }
+
+    unsafe fn get_left_index(&self, parent: *const Block<K, V>, left: *const Block<K, V>) -> usize {
+        let mut left_index = 0;
+        while left_index <= Self::num_keys(parent) as usize && *Self::nth_ptr(parent, left_index) != Self::offset_to(self.meta.as_meta().start as *const _, left) {
+            left_index += 1;
+        }
+        left_index
+    }
+
+    unsafe fn insert_into_leaf(&mut self, leaf: *mut Block<K, V>, key: K, value: *mut Block<K, V>) {
+        println!("insert_into_leaf");
+        let mut insertion_point = 0;
+        while insertion_point < Self::num_keys(leaf) as usize && *Self::nth_key(leaf, insertion_point) < key {
+            insertion_point += 1;
+        }
+
+        for i in (insertion_point..Self::num_keys(leaf) as usize).rev() {
+            let k_old = Self::nth_key_mut(leaf, i);
+            let k_new = Self::nth_key_mut(leaf, i+1);
+            mem::swap(&mut*k_new, &mut*k_old);
+            let p_old = Self::nth_ptr_mut(leaf, i);
+            let p_new = Self::nth_ptr_mut(leaf, i+1);
+            mem::swap(&mut*p_new, &mut*p_old);
+        }
+        let k_slot = Self::nth_key_mut(leaf, insertion_point);
+        *k_slot = key;
+        let p_slot = Self::nth_ptr_mut(leaf, insertion_point);
+        *p_slot = Self::offset_to(self.meta.as_meta_mut().start, value);
+        let n_keys = Self::num_keys_mut(leaf);
+        *n_keys += 1;
+    }
+
+    unsafe fn split_and_insert_into_leaf(&mut self, leaf: *mut Block<K, V>, key: K, value: *mut Block<K, V>) {
+        println!("split_and_insert_into_leaf");
+        let mut temp_keys: [K; ORDER] = mem::uninitialized();
+        let mut temp_ptrs: [isize; ORDER] = mem::uninitialized();
+
+        let mut insertion_index = 0;
+        let nk = Self::num_keys(leaf);
+        while insertion_index < nk as usize - 1 && *Self::nth_key(leaf, insertion_index) < key {
+            insertion_index += 1;
+        }
+        println!("[{:?}, {:?}, {:?}] {}", *Self::nth_key(leaf, 0), *Self::nth_key(leaf, 1), *Self::nth_key(leaf, 2), insertion_index);
+
+        for t in (0..(nk as usize + 1)).filter(|&x| x != insertion_index).zip(0..nk as usize) {
+            let k_old = Self::nth_key_mut(leaf, t.1);
+            let k_new = &mut temp_keys[t.0];
+            mem::swap(k_new, &mut*k_old);
+            let p_old = Self::nth_ptr_mut(leaf, t.1);
+            let p_new = &mut temp_ptrs[t.0];
+            mem::swap(p_new, &mut*p_old);
+        }
+        let k_slot = Self::nth_key_mut(leaf, insertion_index);
+        *k_slot = key;
+        let p_slot = Self::nth_ptr_mut(leaf, insertion_index);
+        *p_slot = Self::offset_to(self.meta.as_meta_mut().start, value);
+        let mut n_keys = Self::num_keys_mut(leaf);
+        *n_keys = 0;
+
+        let split = Self::cut(ORDER - 1);
+        for i in 0..split {
+            let k_old = &mut temp_keys[i];
+            let k_new = Self::nth_key_mut(leaf, i);
+            mem::swap(&mut*k_new, k_old);
+            let p_old = &mut temp_ptrs[i];
+            let p_new = Self::nth_ptr_mut(leaf, i);
+            mem::swap(&mut*p_new, p_old);
+            *n_keys += 1;
+        }
+
+        let new_leaf = self.meta.as_meta_mut().start.offset(self.make_leaf());
+        n_keys = Self::num_keys_mut(new_leaf);
+        for i in (split..ORDER).zip(0..) {
+            let k_old = &mut temp_keys[i.0];
+            let k_new = Self::nth_key_mut(new_leaf, i.1);
+            mem::swap(&mut*k_new, k_old);
+            let p_old = &mut temp_ptrs[i.0];
+            let p_new = Self::nth_ptr_mut(new_leaf, i.1);
+            mem::swap(&mut*p_new, p_old);
+            *n_keys += 1;
+        }
+        let p_next_old = Self::nth_ptr_mut(new_leaf, ORDER - 1);
+        let p_next_new = Self::nth_ptr_mut(leaf, ORDER - 1);
+        mem::swap(&mut*p_next_new, &mut*p_next_old);
+        *p_next_old = *Self::nth_ptr_mut(leaf, ORDER - 1);
+        *p_next_new = Self::offset_to(self.meta.as_meta_mut().start, new_leaf);
+        mem::swap(&mut*p_next_new, &mut*p_next_old);
+
+        for i in Self::num_keys(leaf) as usize..(ORDER - 1) {
+            let ptr = Self::nth_ptr_mut(leaf, i);
+            *ptr = 0;
+        }
+        for i in Self::num_keys(new_leaf) as usize..(ORDER - 1) {
+            let ptr = Self::nth_ptr_mut(new_leaf, i);
+            *ptr = 0;
+        }
+
+        let parent_ptr = Self::parent_mut(new_leaf);
+        let leaf_parent = Self::parent(new_leaf);
+        *parent_ptr = leaf_parent;
+        let new_key = mem::transmute_copy(&*Self::nth_key(new_leaf, 0));
+        self.insert_into_parent(leaf, new_key, new_leaf)
+    }
+
+    unsafe fn insert_into_node(&mut self, n: *mut Block<K, V>, left_index: usize, key: K, right: *mut Block<K, V>) {
+        println!("insert_into_node");
+        for i in (left_index..Self::num_keys(n) as usize).rev() {
+            let k_old = Self::nth_key_mut(n, i + 1);
+            let k_new = Self::nth_key_mut(n, i + 0);
+            mem::swap(&mut*k_new, &mut*k_old);
+            let p_old = Self::nth_ptr_mut(n, i + 2);
+            let p_new = Self::nth_ptr_mut(n, i + 1);
+            mem::swap(&mut*p_new, &mut*p_old);
+        }
+        let p_old = Self::nth_ptr_mut(n, left_index + 1);
+        *p_old = Self::offset_to(self.meta.as_meta_mut().start, right);
+        let k_old = Self::nth_key_mut(n, left_index);
+        *k_old = key;
+        let n_keys = Self::num_keys_mut(n);
+        *n_keys += 1;
+    }
+
+    unsafe fn split_and_insert_into_node(&mut self, old_node: *mut Block<K, V>, left_index: usize, key: K, right: *mut Block<K, V>) {
+        println!("split_and_insert_into_node");
+        let mut temp_ptrs: [isize; ORDER] = mem::uninitialized();
+        let mut temp_keys: [K; ORDER] = mem::uninitialized();
+        let nk = Self::num_keys(old_node as *const _) as usize;
+        for t in (0..(nk + 1)).filter(|&x| x != left_index + 1).zip(0..) {
+            let p = Self::nth_ptr_mut(old_node, t.0);
+            temp_ptrs[t.1] = *p;
+        }
+        for t in (0..nk).filter(|&x| x != left_index).zip(0..) {
+            let k = Self::nth_key_mut(old_node, t.0);
+            mem::swap(&mut temp_keys[t.1], &mut*k);
+        }
+        temp_ptrs[left_index + 1] = Self::offset_to(self.meta.as_meta_mut().start, right);
+        temp_keys[left_index] = key;
+
+        let split = Self::cut(ORDER);
+        let new_node = self.meta.as_meta_mut().start.offset(self.make_node());
+        let mut n_keys = Self::num_keys_mut(old_node);
+        *n_keys = 0;
+        for i in 0..(split - 1) {
+            let k_old = &mut temp_keys[i];
+            let k_new = Self::nth_key_mut(old_node, i);
+            mem::swap(&mut*k_new, k_old);
+            let p_old = &mut temp_ptrs[i];
+            let p_new = Self::nth_ptr_mut(old_node, i);
+            mem::swap(&mut*p_new, p_old);
+            *n_keys += 1;
+        }
+        {
+            let p_old = &mut temp_ptrs[split];
+            let p_new = Self::nth_ptr_mut(old_node, split);
+            mem::swap(&mut*p_new, p_old);
+        }
+        let mut k_prime = mem::uninitialized();
+        mem::swap(&mut k_prime, &mut temp_keys[split - 1]);
+        n_keys = Self::num_keys_mut(new_node);
+        for t in ((split)..ORDER).zip(0..) {
+            let k_old = &mut temp_keys[t.1];
+            let k_new = Self::nth_key_mut(new_node, t.0);
+            mem::swap(&mut*k_new, k_old);
+            let p_old = &mut temp_ptrs[t.1];
+            let p_new = Self::nth_ptr_mut(new_node, t.0);
+            mem::swap(&mut*p_new, p_old);
+            *n_keys += 1;
+        }
+        {
+            let p_old = &mut temp_ptrs[ORDER - split];
+            let p_new = Self::nth_ptr_mut(new_node, ORDER - split);
+            mem::swap(&mut*p_new, p_old);
+        }
+        let parent_ptr = Self::parent_mut(new_node);
+        let node_parent = Self::parent(old_node);
+        *parent_ptr = node_parent;
+        for i in 0..(Self::num_keys(new_node) as usize + 1) {
+            let child = self.meta.as_meta_mut().start.offset(*Self::nth_ptr(new_node, i));
+            let parent = Self::parent_mut(child);
+            *parent = Self::offset_to(self.meta.as_meta_mut().start, new_node);
+        }
+
+        self.insert_into_parent(old_node, k_prime, new_node)
+    }
+
+    unsafe fn insert_into_parent(&mut self, left: *mut Block<K, V>, key: K, right: *mut Block<K, V>) {
+        println!("insert_into_parent {:?}", key);
+        let parent = Self::parent(left);
+        if parent == 0 {
+            self.insert_into_new_root(left, key, right)
+        } else {
+            let parent = self.meta.as_meta_mut().start.offset(parent);
+            let left_index = self.get_left_index(parent, left);
+            
+            if Self::num_keys(parent) as usize + 1 < ORDER {
+                self.insert_into_node(parent, left_index, key, right)
+            } else {
+                self.split_and_insert_into_node(parent, left_index, key, right)
+            }
+        }
+    }
+
+    unsafe fn insert_into_new_root(&mut self, left: *mut Block<K, V>, key: K, right: *mut Block<K, V>) {
+        println!("insert_into_new_root {:?}", key);
+        let root = self.make_node();
+        let prnt = Self::parent_mut(left);
+        *prnt = root;
+        let prnt = Self::parent_mut(right);
+        *prnt = root;
+        self.meta.as_meta_mut().root = root;
+
+        let root = self.meta.as_meta_mut().start.offset(root);
+        let r_key0 = Self::nth_key_mut(root, 0);
+        *r_key0 = key;
+        let r_ptr0 = Self::nth_ptr_mut(root, 0);
+        *r_ptr0 = Self::offset_to(self.meta.as_meta_mut().start, left);
+        let r_ptr1 = Self::nth_ptr_mut(root, 1);
+        *r_ptr1 = Self::offset_to(self.meta.as_meta_mut().start, right);
+        let r_nkey = Self::num_keys_mut(root);
+        *r_nkey += 1;
+        let r_prnt = Self::parent_mut(root);
+        *r_prnt = 0;
+    }
+
+    unsafe fn start_new_tree(&mut self, key: K, value: *mut Block<K, V>) {
+        println!("start_new_tree");
+        let root = self.make_leaf();
+        self.meta.as_meta_mut().root = root;
+        let root = self.meta.as_meta_mut().start.offset(root);
+        let r_key0 = Self::nth_key_mut(root, 0);
+        *r_key0 = key;
+        let r_ptr0 = Self::nth_ptr_mut(root, 0);
+        *r_ptr0 = Self::offset_to(self.meta.as_meta_mut().start, value);
+        let r_nkey = Self::num_keys_mut(root);
+        *r_nkey = 1;
+    }
+
+    pub fn insert(&mut self, key: K, value: V) {
+        println!("insert {:?} {:?}", key, value);
+        unsafe {
+            if self.meta.as_meta().root == 0 {
+                let block = self.meta.as_meta_mut().start.offset(self.make_bucket());
+                (*block).as_bucket_mut().values[0] = value;
+                self.start_new_tree(key, block);
+            } else if self.find_block(&key).is_none() {
+                let block = self.meta.as_meta_mut().start.offset(self.make_bucket());
+                (*block).as_bucket_mut().values[0] = value;
+                let leaf = self.find_leaf_mut(&key);
+                if (Self::num_keys(leaf) as usize + 1) < ORDER {
+                    self.insert_into_leaf(leaf, key, block);
+                } else {
+                    self.split_and_insert_into_leaf(leaf, key, block);
+                }
+            }
+        }
+    }
+
+    pub fn find(&self, key: &K) -> Option<&V> {
+        unsafe {
+            self.find_block(key).and_then(|ref x| Some(&x.as_bucket().values[0] as *const _)).and_then(|x| x.as_ref())
+        }
+    }
+
+    pub fn load_from_buffer<'a, T>(data: &mut T) -> &'a mut Self {
+        let btree = unsafe { &mut*(data as *mut T as *mut Self) };
+        unsafe {
+            btree.meta.as_meta_mut().start = (&mut btree.meta.as_meta_mut() as *mut _ as *mut _).offset(1);
+            btree.meta.as_meta_mut().end = (data as *mut _ as *mut _).offset(1);
+        }
+        btree
+    }
+
+    pub fn make_from_buffer<T>(data: &mut T) -> &mut Self {
+        let btree = unsafe { &mut*(data as *mut T as *mut Self) };
+        unsafe {
+            btree.meta = Block::Meta(mem::zeroed());
+            btree.meta.as_meta_mut().start = (&mut btree.meta as *mut _).offset(1);
+            btree.meta.as_meta_mut().next = 1;
+            btree.meta.as_meta_mut().end = (data as *mut _).offset(1) as *mut _;
+            btree.meta.as_meta_mut().root = 0;
+        }
+        btree
+    }
+}
+
+#[test]
+fn insert_and_find_btree() {
+    let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
+    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    btree.insert(2, 20);
+    unsafe {
+        println!("root: {:?}", (*btree.meta.as_meta_mut().start.offset(btree.meta.as_meta().root)).as_node());
+        println!("bucket: {:?}", (*btree.meta.as_meta_mut().start.offset(btree.meta.as_meta().root - 1)).as_bucket());
+    }
+    assert_eq!(Some(&20), btree.find(&2));
+}
+
+#[test]
+fn insert_and_find_5_btree() {
+    let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
+    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    btree.insert(2, 20);
+    btree.insert(4, 40);
+    btree.insert(3, 30);
+    btree.insert(5, 50);
+    btree.insert(1, 10);
+    unsafe {
+        println!("root: {:?}", (*btree.meta.as_meta_mut().start.offset(btree.meta.as_meta().root)).as_node());
+        println!("bucket: {:?}", (*btree.meta.as_meta_mut().start.offset(btree.meta.as_meta().root - 1)).as_bucket());
+    }
+    assert_eq!(Some(&10), btree.find(&1));
+    assert_eq!(Some(&20), btree.find(&2));
+    assert_eq!(Some(&30), btree.find(&3));
+    assert_eq!(Some(&40), btree.find(&4));
+    assert_eq!(Some(&50), btree.find(&5));
+}
+

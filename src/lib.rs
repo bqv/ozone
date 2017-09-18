@@ -1,8 +1,10 @@
 
 extern crate memmap;
+extern crate rand;
 
 mod set;
 mod map;
+mod table;
 mod buffer;
 
 use set::{HashSet};

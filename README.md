@@ -5,14 +5,13 @@ Ozone is a pure-[rust](http://www.rust-lang.org/) key/value store inspired by th
 
 Goals
 -----
-The goal of this project is to build a perfectly idiomatic persistence layer using the standard library's [collections::HashMap](https://doc.rust-lang.org/collections/struct.HashMap.html) as a model, letting the language itself do as much as possible.
+The goal of this project is to build a perfectly idiomatic persistence layer initially using the standard library's [collections::HashMap](https://doc.rust-lang.org/collections/struct.HashMap.html) as a model, letting the language itself do as much as possible.
 
 Specific features that will be implemented include:
 
 - single-file databases
 - copy-on-write, lock-free MVCC
 - recycling of emptied pages
-
 
 
 
