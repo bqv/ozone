@@ -13,8 +13,8 @@ const INITIAL_SIZE: usize = 256usize; // Must be a power of 2
 const LOAD_FACTOR_PERCENT: usize = 90usize;
 
 pub struct Elem<K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized
 {
     key: K,
     value: V,
@@ -22,8 +22,8 @@ pub struct Elem<K, V>
 }
 
 pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: Buffer<Elem<K, V>>
 {
     buffer: B,
@@ -35,31 +35,31 @@ pub struct HashMap<K, V, B = AnonymousBuffer<Elem<K, V>>>
     phantom_v: PhantomData<V>,
 }
 
-pub enum Entry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+pub enum Entry<'a, K: 'static, V: 'static + 'a>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
 }
 
-pub struct OccupiedEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+pub struct OccupiedEntry<'a, K: 'static, V: 'static + 'a>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     elem: &'a mut Elem<K, V>,
 }
 
-pub struct VacantEntry<'a, K: 'a, V: 'a>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+pub struct VacantEntry<'a, K: 'static, V: 'static + 'a>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     elem: &'a mut Elem<K, V>,
 }
 
-impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+impl<'a, K: 'static, V: 'static + 'a> Entry<'a, K, V>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
@@ -83,9 +83,9 @@ impl<'a, K: 'a, V: 'a> Entry<'a, K, V>
     }
 }
 
-impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+impl<'a, K: 'static, V: 'static + 'a> OccupiedEntry<'a, K, V>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -126,9 +126,9 @@ impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V>
     }
 }
 
-impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+impl<'a, K: 'static, V: 'static + 'a> VacantEntry<'a, K, V>
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     pub fn key(&self) -> &K {
         &self.elem.key
@@ -150,8 +150,8 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V>
 }
 
 impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     pub fn new() -> Self {
         Self::try_new().unwrap()
@@ -177,8 +177,8 @@ impl<K, V> HashMap<K, V, AnonymousBuffer<Elem<K, V>>>
 }
 
 impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
 {
     pub fn new<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
@@ -208,8 +208,8 @@ impl<K, V> HashMap<K, V, FileBuffer<Elem<K, V>>>
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: Buffer<Elem<K, V>>
 {
     pub fn insert(&mut self, key: K, value: V) {
@@ -298,8 +298,8 @@ impl<K, V, B> HashMap<K, V, B>
 }
 
 impl<K, V, B> HashMap<K, V, B>
-    where K: Eq + Hash + Sized,
-          V: Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: Buffer<Elem<K, V>>
 {
     fn hash_key(key: &K) -> u64 {
@@ -462,8 +462,8 @@ impl<K, V, B> HashMap<K, V, B>
 }
 
 pub struct Iter<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -471,8 +471,8 @@ pub struct Iter<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Iter<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = (&'a K, &'a V);
@@ -492,8 +492,8 @@ impl<'a, K, V, B> Iterator for Iter<'a, K, V, B>
 }
 
 pub struct Keys<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -501,8 +501,8 @@ pub struct Keys<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Keys<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = &'a K;
@@ -522,8 +522,8 @@ impl<'a, K, V, B> Iterator for Keys<'a, K, V, B>
 }
 
 pub struct Values<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     map: &'a HashMap<K, V, B>,
@@ -531,8 +531,8 @@ pub struct Values<'a, K, V, B>
 }
 
 impl<'a, K, V, B> Iterator for Values<'a, K, V, B>
-    where K: 'a + Eq + Hash + Sized,
-          V: 'a + Sized,
+    where K: 'static + Eq + Hash + Sized,
+          V: 'static + Sized,
           B: 'a + Buffer<Elem<K, V>>
 {
     type Item = &'a V;
@@ -552,8 +552,8 @@ impl<'a, K, V, B> Iterator for Values<'a, K, V, B>
 }
 
 impl<K, V, B> fmt::Debug for HashMap<K, V, B>
-    where K: Eq + Hash + Sized + fmt::Debug,
-          V: Sized + fmt::Debug,
+    where K: 'static + Eq + Hash + Sized + fmt::Debug,
+          V: 'static + Sized + fmt::Debug,
           B: Buffer<Elem<K, V>>
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

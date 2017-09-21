@@ -1009,7 +1009,7 @@ impl<K, V> BTree<K, V>
                 (*block).as_bucket_mut().values[0] = value;
                 self.start_new_tree(key, block);
                 true
-            } else if self.find_block(&key).is_none() {
+            } else if true || self.find_block(&key).is_none() {
                 if self.is_full() {
                     false
                 } else {
@@ -1051,7 +1051,7 @@ impl<K, V> BTree<K, V>
         }
     }
 
-    pub fn load_from_buffer<'a, T>(data: &mut T) -> &'a mut Self {
+    pub fn load_from<'a, T>(data: &mut T) -> &'a mut Self {
         let btree = unsafe { &mut*(data as *mut T as *mut Self) };
         unsafe {
             btree.meta.as_meta_mut().start = (&mut btree.meta.as_meta_mut() as *mut _ as *mut _).offset(0);
@@ -1060,7 +1060,7 @@ impl<K, V> BTree<K, V>
         btree
     }
 
-    pub fn make_from_buffer<T>(data: &mut T) -> &mut Self {
+    pub fn create_from<T>(data: &mut T) -> &mut Self {
         let btree = unsafe { &mut*(data as *mut T as *mut Self) };
         unsafe {
             btree.meta = Block::Meta(mem::zeroed());
@@ -1094,7 +1094,7 @@ impl<K, V> fmt::Debug for BTree<K, V>
 #[test]
 fn insert_and_find_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     btree.insert(2, 20);
     unsafe {
         for i in 0..BTree::offset_to(btree.meta.as_meta().start, btree.meta.as_meta().end) {
@@ -1107,7 +1107,7 @@ fn insert_and_find_btree() {
 #[test]
 fn insert_and_find_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
         unsafe {
@@ -1124,7 +1124,7 @@ fn insert_and_find_15_btree() {
 #[test]
 fn insert_and_find_range_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
     }
@@ -1134,7 +1134,7 @@ fn insert_and_find_range_15_btree() {
 #[test]
 fn insert_and_delete_left_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
         unsafe {
@@ -1156,7 +1156,7 @@ fn insert_and_delete_left_15_btree() {
 #[test]
 fn insert_and_delete_right_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
         unsafe {
@@ -1178,7 +1178,7 @@ fn insert_and_delete_right_15_btree() {
 #[test]
 fn insert_and_delete_inner_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
         unsafe {
@@ -1200,7 +1200,7 @@ fn insert_and_delete_inner_15_btree() {
 #[test]
 fn insert_and_delete_outer_15_btree() {
     let mut buffer = AnonymousBuffer::<Page>::try_new(mem::size_of::<Page>()).unwrap();
-    let btree: &mut BTree<i32, i32> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<i32, i32> = BTree::create_from(&mut buffer[0]);
     for x in 1..16 {
         btree.insert(x, x);
         unsafe {
@@ -1222,9 +1222,42 @@ fn insert_and_delete_outer_15_btree() {
 #[test]
 fn insert_and_delete_random_300_btree() {
     let mut buffer = AnonymousBuffer::<[Page; 10]>::try_new(mem::size_of::<[Page; 10]>()).unwrap();
-    let btree: &mut BTree<u8, u8> = BTree::make_from_buffer(&mut buffer[0]);
+    let btree: &mut BTree<u8, u8> = BTree::create_from(&mut buffer[0]);
     let mut inp = (1..301).collect::<Vec<_>>();
     let mut out = (1..301).collect::<Vec<_>>();
+    let mut rng = StdRng::new().unwrap();
+    rng.shuffle(&mut inp);
+    rng.shuffle(&mut out);
+    println!("Input: vec!{:?}", inp);
+    println!("Output: vec!{:?}", out);
+    //inp = vec![14, 13, 6, 9, 3, 10, 7, 1, 11, 2, 8, 5, 4, 12];
+    //out = vec![4, 11, 14, 7, 5, 8, 10, 1, 3, 6, 9, 13, 12, 2];
+    for x in inp {
+        btree.insert(x, x);
+        unsafe {
+            for i in 0..BTree::offset_to(btree.meta.as_meta().start, btree.meta.as_meta().end) {
+                println!("After insert {}: {}: {:?}", x, i, *btree.meta.as_meta_mut().start.offset(i));
+            }
+        }
+    }
+    for x in out {
+        btree.delete(&x);
+        unsafe {
+            for i in 0..BTree::offset_to(btree.meta.as_meta().start, btree.meta.as_meta().end) {
+                println!("After delete {}: {}: {:?}", x, i, *btree.meta.as_meta_mut().start.offset(i));
+            }
+        }
+    }
+}
+
+#[test]
+fn insert_and_delete_random_300_duplicate_btree() {
+    let mut buffer = AnonymousBuffer::<[Page; 10]>::try_new(mem::size_of::<[Page; 10]>()).unwrap();
+    let btree: &mut BTree<u8, u8> = BTree::create_from(&mut buffer[0]);
+    let mut inp = (1..151).collect::<Vec<_>>();
+    let mut out = (1..151).collect::<Vec<_>>();
+    inp.extend((1..151));
+    out.extend((1..151));
     let mut rng = StdRng::new().unwrap();
     rng.shuffle(&mut inp);
     rng.shuffle(&mut out);

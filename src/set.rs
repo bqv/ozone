@@ -9,14 +9,14 @@ use map::{HashMap, Elem};
 use buffer::{Buffer, AnonymousBuffer, FileBuffer};
 
 pub struct HashSet<T, B>
-    where T: Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
           B: Buffer<Elem<T, ()>>
 {
     map: HashMap<T, (), B>
 }
 
 impl<T> HashSet<T, AnonymousBuffer<Elem<T, ()>>>
-    where T: Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
 {
     pub fn new() -> Self {
         let map = HashMap::<T, (), AnonymousBuffer<Elem<T, ()>>>::new();
@@ -30,7 +30,7 @@ impl<T> HashSet<T, AnonymousBuffer<Elem<T, ()>>>
 }
 
 impl<T> HashSet<T, FileBuffer<Elem<T, ()>>>
-    where T: Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
 {
     pub fn new<P>(path: P) -> Self
         where P: AsRef<Path> + Clone
@@ -48,7 +48,7 @@ impl<T> HashSet<T, FileBuffer<Elem<T, ()>>>
 }
 
 impl<T, B> HashSet<T, B>
-    where T: Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
           B: Buffer<Elem<T, ()>>
 {
     pub fn iter<'a>(&'a self) -> Iter<'a, T, B> {
@@ -102,14 +102,14 @@ impl<T, B> HashSet<T, B>
 }
 
 pub struct Iter<'a, T, B>
-    where T: 'a + Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
           B: 'a + Buffer<Elem<T, ()>>
 {
     iter: ::map::Iter<'a, T, (), B>,
 }
 
 impl<'a, T, B> Iterator for Iter<'a, T, B>
-    where T: 'a + Eq + Hash + Sized,
+    where T: 'static + Eq + Hash + Sized,
           B: 'a + Buffer<Elem<T, ()>>
 {
     type Item = &'a T;
@@ -120,7 +120,7 @@ impl<'a, T, B> Iterator for Iter<'a, T, B>
 }
 
 impl<T, B> fmt::Debug for HashSet<T, B>
-    where T: Eq + Hash + Sized + fmt::Debug,
+    where T: 'static + Eq + Hash + Sized + fmt::Debug,
           B: Buffer<Elem<T, ()>>
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

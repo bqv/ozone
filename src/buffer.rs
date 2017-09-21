@@ -1,5 +1,5 @@
 
-#[allow(unused_imports)] use std::io::{Result, Write};
+use std::io::{Result, Write};
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use memmap::{Mmap, Protection};
@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 pub trait Buffer<T>: Index<usize, Output = T> + IndexMut<usize> + Clone + Sized
 {
     fn new_sized(&self, usize) -> Result<Self>;
+    fn resize(&mut self, usize) -> Result<()>;
 }
 
 pub struct AnonymousBuffer<T>
@@ -76,6 +77,18 @@ impl<T> Buffer<T> for AnonymousBuffer<T>
 {
     fn new_sized(&self, size: usize) -> Result<Self> {
         Self::try_new(size)
+    }
+
+    fn resize(&mut self, size: usize) -> Result<()> {
+        let mut new_map = Mmap::anonymous(size, Protection::ReadWrite)?;
+        {
+            let mut old_map = self.data.lock().unwrap();
+            let mut slice_to: &mut[u8] = unsafe { new_map.as_mut_slice() };
+            let mut slice_from: &mut[u8] = unsafe { old_map.as_mut_slice() };
+            slice_to.write(slice_from)?;
+        }
+        self.data = Arc::new(Mutex::new(new_map));
+        Ok(())
     }
 }
 
@@ -151,6 +164,19 @@ impl<T> Buffer<T> for FileBuffer<T>
 {
     fn new_sized(&self, size: usize) -> Result<Self> {
         Self::try_new(self.path.clone(), size)
+    }
+
+    fn resize(&mut self, size: usize) -> Result<()> {
+        {
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.path)?;
+            file.set_len(size as u64)?;
+        }
+        let map = Mmap::open_path(self.path.clone(), Protection::ReadWrite)?;
+        self.data = Arc::new(Mutex::new(map));
+        Ok(())
     }
 }
 
